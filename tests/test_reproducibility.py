@@ -26,5 +26,13 @@ def test_market_shape(market):
     weekdays = market.prices[market.prices.index.weekday < 5]
     assert len(weekdays) == 1500
     assert (market.prices.index.weekday >= 5).any()  # metal weekend quotes exist
-    assert weekdays.iloc[:, :-1].isna().any().all()  # every exchange has holidays
-    assert weekdays.iloc[:, -1].notna().all()  # the metal never closes on a weekday
+    listed = weekdays.drop(columns="GOLD-KG")
+    assert listed.isna().any().all()  # every exchange has holidays
+    assert weekdays["GOLD-KG"].notna().all()  # the metal never closes on a weekday
+
+
+def test_fictitious_lines_follow_europe_with_their_own_risk(market):
+    weekdays = market.prices[market.prices.index.weekday < 5]
+    r = weekdays.pct_change(fill_method=None)
+    for ticker in ("FIC-SC", "FIC-LV"):
+        assert 0.1 < r[ticker].corr(r["ADS.DE"]) < 0.9

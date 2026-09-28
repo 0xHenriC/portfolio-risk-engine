@@ -54,43 +54,54 @@ imported the checked code would share its bugs and prove nothing.
 
 ## Results on the synthetic data (seed 20240613)
 
-`python -m risk_engine demo` values a EUR 10.1 m book (8 securities, 2 cash pockets) on
-2025-10-31, over 1,498 daily returns.
+`python -m risk_engine demo` values a EUR 10.0 m book on 2025-10-31: eight listed names,
+two fictitious illiquid lines (a small cap and a thinly traded stock, 10 % of the total)
+and two cash pockets, over 1,495 daily returns.
 
 | Method | Level | VaR % | ES % | VaR EUR | ES EUR |
 |---|---|---|---|---|---|
-| historical | 95 % | -1.360 | -2.306 | -122,188 | -207,136 |
-| historical | 97.5 % | -1.956 | -3.005 | -175,669 | -269,923 |
-| historical | 99 % | -2.724 | -4.248 | -244,617 | -381,565 |
-| normal | 95 % | -1.642 | -2.066 | -147,446 | -185,550 |
-| normal | 97.5 % | -1.962 | -2.345 | -176,181 | -210,635 |
-| normal | 99 % | -2.334 | -2.678 | -209,590 | -240,491 |
+| historical | 95 % | -1.318 | -2.261 | -122,653 | -210,387 |
+| historical | 97.5 % | -1.865 | -2.958 | -173,498 | -275,246 |
+| historical | 99 % | -2.643 | -4.188 | -245,927 | -389,683 |
+| normal | 95 % | -1.617 | -2.035 | -150,476 | -189,341 |
+| normal | 97.5 % | -1.932 | -2.310 | -179,784 | -214,926 |
+| normal | 99 % | -2.299 | -2.637 | -213,861 | -245,379 |
 
-Annualised volatility 16.12 %; maximum drawdown -25.36 % (peak 2020-08-25, trough
-2020-09-21, recovered 2021-08-13). Witness check: OK (max rel. diff 1.7e-15).
+Annualised volatility 15.87 %; maximum drawdown -25.60 % (peak 2020-08-25, trough
+2020-09-21, recovered 2021-08-17). Witness check: OK (max rel. diff 1.5e-15).
 
 | 99 % VaR backtest | Days | Exceptions | Expected | Kupiec p | Christoffersen p | Last 250 | Worst 250 |
 |---|---|---|---|---|---|---|---|
-| historical | 1,248 | 14 | 12.5 | 0.67 | 0.15 | 3 (green) | 5 (yellow) |
-| normal | 1,248 | 16 | 12.5 | 0.34 | 0.20 | 4 (green) | 8 (yellow) |
+| historical | 1,245 | 15 | 12.5 | 0.48 | 0.55 | 3 (green) | 6 (yellow) |
+| normal | 1,245 | 18 | 12.5 | 0.14 | 0.47 | 4 (green) | 8 (yellow) |
 
-On this one draw the difference is modest. `python -m risk_engine seeds` repeats the
-backtest on 30 synthetic histories: the normal VaR averages 17.3 exceptions for 12.5
-expected and Kupiec rejects it in 10 of 30 cases, against 15.3 exceptions and no rejection
-for the historical VaR. On fat-tailed returns the normal law places the 99 % quantile too
-close to the centre, and its ES understates the tail even more (-2.68 % against -4.25 %).
+On one draw the difference is modest. `python -m risk_engine seeds` repeats the backtest
+on 30 synthetic histories: the normal VaR averages 16.9 exceptions for 12.4 expected and
+Kupiec rejects it in 6 of 30 cases, against 15.6 exceptions and 1 rejection for the
+historical VaR. On fat-tailed returns the normal law places the 99 % quantile too close
+to the centre, and its ES understates the tail even more (-2.64 % against -4.19 %).
 In `--live` mode on real closes (run in September 2026) both methods were rejected and
 exceptions clustered (Christoffersen p below 0.001): an unconditional VaR reacts too
 slowly to volatility regimes.
 
 | Stress (share of wealth) | Loss |
 |---|---|
-| Equities -20 % | -15.60 % |
-| USD -10 % against EUR (HKD pegged) | -5.89 % |
-| Asia -25 % | -6.45 % |
-| Gold +15 % | +1.69 % |
-| Worst 5 sessions of the sample | -16.38 % |
-| Liquidity: days to sell at 20 % / 10 % / 5 % of volume | 0.04 / 0.07 / 0.15 |
+| Equities -20 % | -16.45 % |
+| USD -10 % against EUR (HKD pegged) | -5.34 % |
+| Asia -25 % | -5.97 % |
+| Gold +15 % | +1.57 % |
+| Worst 5 sessions of the sample | -16.96 % |
+
+| Liquidity stress: days to sell | Weight | 20 % of volume | 10 % | 5 % |
+|---|---|---|---|---|
+| Fictitious low-volume line | 6.3 % | 6.60 | 13.21 | 26.42 |
+| Fictitious small cap | 4.6 % | 4.74 | 9.49 | 18.98 |
+| Most illiquid listed name | 11.0 % | 0.10 | 0.19 | 0.39 |
+| Book, value-weighted (88.7 % covered; the metal has no volume) | | 0.75 | 1.49 | 2.98 |
+
+Two lines holding a tenth of the book account for about 95 % of the value-weighted score,
+and the score hides the tail: at a 5 % participation rate the last line would take 26
+sessions, more than five weeks, to sell.
 
 ![Distribution of daily P&L with VaR and ES](docs/img/pnl_distribution.png)
 
@@ -122,7 +133,8 @@ Python 3.11 or later; numpy, pandas, scipy, matplotlib; yfinance only for `--liv
   returns and a static book; clustering and autocorrelation make it wrong in stress.
 - **Synthetic data.** Prices, volumes, dividends and betas are simulated
   (multivariate Student-t, 4 degrees of freedom, two stressed regimes, a few crisis days).
-  The securities are real names used as labels only. Results say nothing about them.
+  The listed securities are real names used as labels only, and the two illiquid lines
+  are invented. Results say nothing about any company.
 - **Calendar.** No exchange holiday calendar: a closure longer than three sessions takes a
   line out of the valuation total, which is then flagged as incomplete.
 

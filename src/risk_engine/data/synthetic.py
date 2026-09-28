@@ -17,7 +17,7 @@ N_DAYS = 1500
 END_DATE = "2025-10-31"
 STUDENT_DF = 4
 TROY_OUNCES_PER_KG = 1000 / 31.1034768
-BOOK_SCALE = 13
+BOOK_SCALE = 12
 
 SECURITIES = pd.DataFrame(
     [
@@ -38,6 +38,10 @@ SECURITIES = pd.DataFrame(
          "Life Insurance", "Hong Kong", "Hong Kong", 1.0),
         ("GIVN.SW", "Givaudan", "CHF", "equity", "Materials",
          "Specialty Chemicals", "Switzerland", "SIX Swiss", 1.0),
+        ("FIC-SC", "Fictitious small cap", "EUR", "equity", "Industrials",
+         "Machinery", "Germany", "XETRA", 1.0),
+        ("FIC-LV", "Fictitious low-volume line", "EUR", "equity", "Consumer Staples",
+         "Food Products", "Italy", "Borsa Italiana", 1.0),
         ("GOLD-KG", "Gold, 1 kg bar", "USD", "metal", None,
          None, None, "Metal", TROY_OUNCES_PER_KG),
     ],
@@ -58,7 +62,12 @@ _ASSET_PARAMS = {
     "GOLD-KG": (0.15, 0.05, 1750.0),
 }
 _REGION = {"PG": "US", "ADBE": "US", "ADS.DE": "EU", "PHIA.AS": "EU", "KNEBV.HE": "EU",
-           "6758.T": "JP", "1299.HK": "HK", "GIVN.SW": "CH", "GOLD-KG": "GOLD"}
+           "6758.T": "JP", "1299.HK": "HK", "GIVN.SW": "CH", "GOLD-KG": "GOLD",
+           "FIC-SC": "EU", "FIC-LV": "EU"}
+# Two fictitious illiquid lines, drawn from their own random stream so that the paths of
+# the other securities do not depend on them: loading on the European equity factor,
+# idiosyncratic volatility, annual drift, starting price.
+FICTITIOUS = {"FIC-SC": (0.9, 0.32, 0.02, 14.0), "FIC-LV": (0.5, 0.20, 0.04, 55.0)}
 _FX_PARAMS = {"USD": (0.075, 1.10), "JPY": (0.095, 130.0), "CHF": (0.055, 1.02)}
 _HKD_PEG = 7.80
 
@@ -68,6 +77,7 @@ _DIVIDENDS = [
     ("ADS.DE", 5, 15, 3.00), ("PHIA.AS", 5, 10, 0.85), ("KNEBV.HE", 3, 5, 1.75),
     ("6758.T", 3, 28, 40.0), ("6758.T", 9, 27, 40.0),
     ("1299.HK", 5, 20, 1.20), ("1299.HK", 8, 25, 0.50), ("GIVN.SW", 3, 25, 68.0),
+    ("FIC-LV", 5, 22, 1.60),
 ]
 
 
@@ -142,7 +152,7 @@ def _holiday_mask(rng: np.random.Generator, dates: pd.DatetimeIndex, tickers: li
 def _simulate_paths(rng: np.random.Generator, dates: pd.DatetimeIndex
                     ) -> tuple[pd.DataFrame, pd.DataFrame]:
     """Log-return paths for securities (quote currency) and FX (units per EUR)."""
-    tickers = list(SECURITIES.index)
+    tickers = list(_ASSET_PARAMS)
     names = tickers + list(_FX_PARAMS)
     n = len(dates)
     shocks = _student_t_shocks(rng, _correlation(names), n) * _volatility_regime(n)[:, None]
@@ -160,6 +170,22 @@ def _simulate_paths(rng: np.random.Generator, dates: pd.DatetimeIndex
     fx_per_eur = pd.DataFrame(levels[:, len(tickers):], index=dates, columns=list(_FX_PARAMS))
     fx_per_eur["HKD"] = fx_per_eur["USD"] * _HKD_PEG * np.exp(rng.normal(0, 4e-4, n))
     return prices, fx_per_eur
+
+
+def _fictitious_paths(seed: int, prices: pd.DataFrame) -> pd.DataFrame:
+    """Illiquid lines: European equity factor x loading, plus fat-tailed own risk."""
+    rng = np.random.default_rng([seed, 1])
+    n = len(prices)
+    europe = [t for t in _ASSET_PARAMS if _REGION[t] == "EU"]
+    factor = np.log(prices[europe]).diff().mean(axis=1).fillna(0.0).to_numpy()
+    regime = _volatility_regime(n)
+    out = {}
+    for ticker, (loading, own_vol, drift, start) in FICTITIOUS.items():
+        own = rng.standard_t(STUDENT_DF, n) * np.sqrt((STUDENT_DF - 2) / STUDENT_DF)
+        log_ret = loading * factor + own * regime * own_vol / np.sqrt(252) + drift / 252
+        log_ret[0] = 0.0
+        out[ticker] = start * np.exp(np.cumsum(log_ret))
+    return pd.DataFrame(out, index=prices.index)
 
 
 def _dividend_table(dates: pd.DatetimeIndex) -> pd.DataFrame:
@@ -198,9 +224,11 @@ def _add_metal_weekends(prices: pd.DataFrame, rng: np.random.Generator) -> pd.Da
 
 
 def _volumes(rng: np.random.Generator, dates: pd.DatetimeIndex) -> pd.DataFrame:
-    """Daily traded shares over the last 120 sessions, with one drying-up and one busy name."""
+    """Daily traded shares over the last 120 sessions, with one drying-up and one busy name,
+    and two thinly traded fictitious lines."""
     adv = {"PG": 7e6, "ADBE": 3e6, "ADS.DE": 6e5, "PHIA.AS": 3e6, "KNEBV.HE": 5e5,
-           "6758.T": 5e6, "1299.HK": 2.5e7, "GIVN.SW": 2.5e4, "GOLD-KG": np.nan}
+           "6758.T": 5e6, "1299.HK": 2.5e7, "GIVN.SW": 2.5e4, "GOLD-KG": np.nan,
+           "FIC-SC": 4.5e4, "FIC-LV": 5.5e3}
     recent = dates[-120:]
     data = {}
     for t, base in adv.items():
@@ -216,8 +244,9 @@ def _volumes(rng: np.random.Generator, dates: pd.DatetimeIndex) -> pd.DataFrame:
 def _betas() -> pd.Series:
     """Illustrative vendor-style betas, used for the value-weighted beta of the book."""
     return pd.Series({"PG": 0.45, "ADBE": 1.20, "ADS.DE": 1.10, "PHIA.AS": 0.90,
-                      "KNEBV.HE": 0.70, "6758.T": 0.95, "1299.HK": 0.85, "GIVN.SW": 0.60},
-                     name="beta")
+                      "KNEBV.HE": 0.70, "6758.T": 0.95, "1299.HK": 0.85, "GIVN.SW": 0.60,
+                      "FIC-SC": 1.15, "FIC-LV": 0.55}, name="beta")
+
 
 def _bricks(rng: np.random.Generator, prices: pd.DataFrame, fx_to_eur: pd.DataFrame
             ) -> tuple[pd.DataFrame, pd.DataFrame]:
@@ -280,10 +309,13 @@ def build_journal(prices: pd.DataFrame, fx_to_eur: pd.DataFrame, securities: pd.
         (820, "KNEBV.HE", "SELL", 500), (880, "PHIA.AS", "SELL", 1000),
         (880, "PHIA.AS", "BUY", 1500), (1000, "1299.HK", "BUY", 4000), (1100, "PG", "BUY", 150),
         (1250, "ADS.DE", "SELL", 100), (1400, "ADBE", "BUY", 40),
+        (12, "FIC-SC", "BUY", 3500), (12, "FIC-LV", "BUY", 600), (1300, "FIC-SC", "BUY", 700),
     ]
     rows = []
     for i, name, side, qty in trades:
         ticker = name if name in securities.index else _replacement(name, securities)
+        if ticker is None:
+            continue
         d = day(i)
         close = prices[ticker].loc[:d].dropna().iloc[-1]
         unit = securities.at[ticker, "unit_factor"]
@@ -296,10 +328,12 @@ def build_journal(prices: pd.DataFrame, fx_to_eur: pd.DataFrame, securities: pd.
     return pd.DataFrame(rows, columns=cols)
 
 
-def _replacement(name: str, securities: pd.DataFrame) -> str:
-    """The security standing in for a synthetic one (the metal line in live mode)."""
-    same_class = securities[securities["asset_class"] == SECURITIES.at[name, "asset_class"]]
-    return same_class.index[0]
+def _replacement(name: str, securities: pd.DataFrame) -> str | None:
+    """The security standing in for a synthetic one in live mode: a gold tracker for the
+    metal line; none for the fictitious lines, which have no market data and are skipped."""
+    if SECURITIES.at[name, "asset_class"] != "metal":
+        return None
+    return securities[securities["asset_class"] == "metal"].index[0]
 
 
 def declared_holdings(journal: pd.DataFrame) -> pd.Series:
@@ -314,6 +348,7 @@ def generate_market(seed: int = DEFAULT_SEED) -> MarketData:
     rng = np.random.default_rng(seed)
     dates = pd.bdate_range(end=END_DATE, periods=N_DAYS)
     prices, fx_per_eur = _simulate_paths(rng, dates)
+    prices = prices.join(_fictitious_paths(seed, prices))
     dividends = _dividend_table(dates)
     prices = _apply_ex_dividend_drops(prices, dividends)
     prices = prices.mask(_holiday_mask(rng, dates, list(prices.columns)))
@@ -333,5 +368,5 @@ def generate_market(seed: int = DEFAULT_SEED) -> MarketData:
         brick_distributions=dist,
         journal=journal,
         declared_holdings=declared_holdings(journal),
-        cash={"EUR": 600_000.0, "USD": 500_000.0},
+        cash={"EUR": 400_000.0, "USD": 350_000.0},
     )

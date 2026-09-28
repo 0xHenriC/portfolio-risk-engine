@@ -12,6 +12,15 @@ def test_stressed_scores_are_exactly_two_and_four_times_normal(result):
     assert liq["coverage_pct"] < 100  # the metal line has no traded volume
 
 
+def test_illiquid_lines_take_several_days_to_sell(result):
+    liq = result["liquidity"]
+    lines = liq["lines"]
+    assert list(liq["least_liquid"].index[:2]) == ["FIC-LV", "FIC-SC"]
+    assert (lines.loc[["FIC-LV", "FIC-SC"], "days_normal"] > 3).all()
+    share = lines.loc[["FIC-LV", "FIC-SC"], "value_eur"].sum() / result["valuation"]["total_eur"]
+    assert share == pytest.approx(0.10, abs=0.02)
+
+
 def test_days_to_liquidate_and_volume_trend():
     adv = pd.DataFrame({"adv10": [1000.0, 500.0], "adv90": [1000.0, 1000.0]}, index=["A", "B"])
     out = liquidity.compute_liquidity_metrics(pd.Series({"A": 400.0, "B": 400.0}),

@@ -5,8 +5,9 @@ data, so none of it is committed. Only completed sessions are used: a row dated 
 be an intraday quote, not a close. Closes are split-adjusted but not dividend-adjusted;
 dividends are downloaded separately and added on their ex-date, as in synthetic mode,
 so they are never counted twice. The metal line is replaced by a listed gold tracker
-(held in shares, unit factor 1). Betas keep the illustrative synthetic values, and the
-benchmark bricks are not downloaded.
+(held in shares, unit factor 1) and the two fictitious illiquid lines are left out, since
+they have no market data. Betas keep the illustrative synthetic values, and the benchmark
+bricks are not downloaded.
 """
 
 from __future__ import annotations
@@ -43,7 +44,7 @@ def _download(symbol: str, refresh: bool) -> pd.DataFrame:
 
 def live_securities() -> pd.DataFrame:
     """The synthetic universe with the metal bar swapped for a gold tracker in shares."""
-    secs = synthetic.SECURITIES.drop(index="GOLD-KG")
+    secs = synthetic.SECURITIES.drop(index=["GOLD-KG", *synthetic.FICTITIOUS])
     gold = pd.DataFrame([{"name": "Gold tracker", "currency": "USD", "asset_class": "metal",
                           "sector": None, "industry": None, "country": None,
                           "venue": "Metal", "unit_factor": 1.0}], index=[GOLD_TRACKER])

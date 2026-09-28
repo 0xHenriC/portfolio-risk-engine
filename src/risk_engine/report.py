@@ -68,9 +68,17 @@ def format_report(r: dict) -> str:
             lines.append(f"{h['name']:<32} {_eur(h['pnl_eur'])} {h['pnl_pct']:>7.2f}%   "
                          f"{h['start'].date()} to {h['end'].date()}")
     liq = r["liquidity"]
-    lines.append(_rule("Liquidity stress (days to sell, value-weighted)"))
-    lines.append("  ".join(f"{k} {v:.2f} d" for k, v in liq["score_days"].items())
-                 + f"   coverage {liq['coverage_pct']:.1f} %")
+    lines.append(_rule("Liquidity stress: days to sell at 20 % / 10 % / 5 % of 10-day volume"))
+    lines.append(f"{'line':<22} {'weight':>7} {'normal':>8} {'moderate':>9} {'severe':>8}")
+    book = liq["lines"]
+    worst = book.dropna(subset=["days_normal"]).sort_values("days_normal", ascending=False)
+    for ticker, row in worst.head(5).iterrows():
+        lines.append(f"{ticker:<22} {row['value_eur'] / book['value_eur'].sum():>7.1%} "
+                     f"{row['days_normal']:>8.2f} {row['days_moderate']:>9.2f} "
+                     f"{row['days_severe']:>8.2f}")
+    s = liq["score_days"]
+    lines.append(f"{'book, value-weighted':<22} {liq['coverage_pct'] / 100:>7.1%} "
+                 f"{s['normal']:>8.2f} {s['moderate']:>9.2f} {s['severe']:>8.2f}")
     if "benchmark" in r and r["benchmark"].get("ok"):
         b = r["benchmark"]
         lines.append(_rule("Against the composite benchmark"))
