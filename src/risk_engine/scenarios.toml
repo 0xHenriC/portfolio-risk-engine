@@ -1,0 +1,43 @@
+# Hypothetical market scenarios, applied instantly to today's positions.
+#
+# Shocks are relative changes. A price shock moves the local-currency price; a
+# currency shock moves the value of that currency against the euro (USD = -0.10 means
+# one dollar buys 10 % fewer euros). Shocks on the same line compound:
+# new value = value x (1 + price shocks) x (1 + currency shock).
+# Price shocks apply by asset class ("equity", "metal") and by geographic zone
+# (the zones of exposures.py). Cash pockets only take currency shocks.
+
+[[scenario]]
+name = "Equities -20%"
+equity = -0.20
+
+[[scenario]]
+name = "USD -10% vs EUR"
+# The Hong Kong dollar is pegged to the US dollar, so it follows it.
+currency = { USD = -0.10, HKD = -0.10 }
+
+[[scenario]]
+name = "Asia -25%"
+zone = { "Greater China" = -0.25, "Other Asia" = -0.25, "India" = -0.25 }
+
+[[scenario]]
+name = "Gold +15%"
+metal = 0.15
+
+[[scenario]]
+name = "Combined risk-off"
+equity = -0.20
+metal = 0.10
+zone = { "Greater China" = -0.10, "Other Asia" = -0.10 }
+currency = { USD = 0.05, HKD = 0.05, JPY = 0.08, CHF = 0.06 }
+
+# Historical windows replayed in --live mode (EUR closes of the current holdings).
+[[historical]]
+name = "Worst week, March 2020"
+start = "2020-02-20"
+end = "2020-03-31"
+
+[[historical]]
+name = "Worst week, October 2008"
+start = "2008-09-29"
+end = "2008-10-31"

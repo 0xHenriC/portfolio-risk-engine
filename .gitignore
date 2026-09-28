@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Downloaded market data: Yahoo terms do not allow redistribution
+.cache/
+
+# Private interview notes, never published
+NOTES_ENTRETIEN.md
+
+# Editors and OS
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+.DS_Store
