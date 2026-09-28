@@ -7,6 +7,12 @@ on the same risk figures.
 
 Written from scratch to illustrate risk methods I use in portfolio monitoring. Contains no employer code or data.
 
+## Highlights
+
+- **Independent witness:** a second implementation that imports nothing from the engine lands on the same risk figures to about 1e-15.
+- **VaR backtest:** over 30 synthetic histories Kupiec rejects the normal VaR 6 times against 1 for the historical VaR; on real closes both are rejected, with clustered exceptions.
+- **Liquidity stress:** the value-weighted score says 3 days to sell at 5 % of volume, while the least liquid line needs 26 days.
+
 ## What it does
 
 | Block | Module | Content |
@@ -42,7 +48,7 @@ imported the checked code would share its bugs and prove nothing.
 | Reference currency | EUR. Foreign closes are converted at the same-day rate, so currency moves are part of the risk |
 | Horizon | 1 day. A 10-day figure is given by square-root-of-time scaling, as an approximation |
 | Confidence levels | 95 % (headline), 97.5 % and 99 % |
-| Sign | VaR and ES are returns: a loss is negative (VaR 99 % = -2.72 % means a 2.72 % loss) |
+| Sign | VaR and ES are returns: a loss is negative (VaR 99 % = -2.64 % means a 2.64 % loss) |
 | Method | Today's positions revalued on each past day (historical simulation at current composition) |
 | Window | At most 10 years, ending at the valuation date |
 | Quantile | Linear interpolation; ES is the mean of returns at or below the VaR |
@@ -111,7 +117,8 @@ sessions, more than five weeks, to sell.
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -e ".[dev]"          # add ,live for the Yahoo mode
+.venv/bin/pip install -e ".[dev]"          # Linux, macOS; add ,live for the Yahoo mode
+.venv\Scripts\pip install -e ".[dev]"      # Windows
 python -m risk_engine demo                 # synthetic data, writes docs/img/*.png
 python -m risk_engine demo --live          # Yahoo closes, cached in .cache/ (not committed)
 python -m risk_engine seeds --n 30         # backtest over 30 synthetic histories
