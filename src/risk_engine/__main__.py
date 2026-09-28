@@ -1,6 +1,6 @@
 """Command line.
 
-    python -m risk_engine demo [--live] [--seed N] [--no-charts]
+    python -m risk_engine demo [--live] [--seed N] [--no-charts] [--html [--html-out PATH]]
     python -m risk_engine seeds [--n 30]
 """
 
@@ -33,6 +33,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--n", type=int, default=30, help="number of seeds for 'seeds'")
     parser.add_argument("--no-charts", action="store_true")
     parser.add_argument("--charts-dir", type=Path, default=Path("docs/img"))
+    parser.add_argument("--html", action="store_true", help="also write the HTML dashboard")
+    parser.add_argument("--html-out", type=Path, default=Path("docs/dashboard.html"))
     args = parser.parse_args(argv)
 
     if args.command == "seeds":
@@ -48,6 +50,11 @@ def main(argv: list[str] | None = None) -> int:
     if not args.no_charts:
         for path in report.save_charts(result, args.charts_dir):
             print(f"chart written: {path.as_posix()}")
+    if args.html:
+        from risk_engine import dashboard
+
+        path = dashboard.write_dashboard(result, args.html_out)
+        print(f"dashboard written: {path.as_posix()}")
     return 0 if result["witness"]["ok"] else 1
 
 

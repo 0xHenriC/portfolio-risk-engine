@@ -1,11 +1,19 @@
 # portfolio-risk-engine
 
-Monitoring and market risk of a multi-currency equity book valued in EUR: positions from
-a trade journal, daily valuation, performance by period, VaR and Expected Shortfall,
-a VaR backtest, stress tests, and an independent second implementation that must land
-on the same risk figures.
+Portfolio monitoring and market risk for a multi-currency equity book valued in EUR. On the
+monitoring side it covers positions rebuilt from a trade journal, daily valuation,
+performance by period split into market and flow effects, a position register,
+dividends, exposures and a benchmark. On the risk side it covers VaR and Expected
+Shortfall, a VaR backtest, market and liquidity stress tests, and an independent second
+implementation that must land on the same risk figures.
 
 Written from scratch to illustrate risk methods I use in portfolio monitoring. Contains no employer code or data.
+
+![Dashboard: overview, performance by period and positions](docs/img/dashboard.png)
+
+*Top of the HTML dashboard written by `python -m risk_engine demo --html`
+(`docs/dashboard.html`, a single self-contained file that works offline; GitHub shows its
+source, so download it or open it locally).*
 
 ## Highlights
 
@@ -13,7 +21,11 @@ Written from scratch to illustrate risk methods I use in portfolio monitoring. C
 - **VaR backtest:** over 30 synthetic histories Kupiec rejects the normal VaR 6 times against 1 for the historical VaR; on real closes both are rejected, with clustered exceptions.
 - **Liquidity stress:** the value-weighted score says 3 days to sell at 5 % of volume, while the least liquid line needs 26 days.
 
-## What it does
+---
+
+# Part 1: Portfolio monitoring
+
+## What it covers
 
 | Block | Module | Content |
 |---|---|---|
@@ -22,12 +34,68 @@ Written from scratch to illustrate risk methods I use in portfolio monitoring. C
 | Performance | `performance.py` | 1W, 1M, YTD, 1Y, since inception; market effect vs flow effect, balanced to the cent |
 | Income, register | `dividends.py`, `register.py` | Gross dividends at the ex-date rate, yield on cost; per-line local return, EUR return and currency effect |
 | Exposures | `exposures.py` | Concentration, sectors, currencies, geographic zones, weighted beta |
+| Benchmark | `benchmark.py` | Composite benchmark weighted like the currency exposure; beta, alpha, R squared, tracking error |
+| Controls | `quality.py` | Split-like price jumps, stale series, session gaps, implausible quantity changes |
+| Dashboard | `dashboard.py` | One self-contained HTML page: overview, positions, register, benchmark, exposures, risk, stress, controls |
+
+## Conventions
+
+| Item | Convention |
+|---|---|
+| Cost basis | Weighted average cost per holding cycle; a cycle ends when the quantity returns to zero |
+| Same session | A session's sales draw first on the holding before the session, then on that day's purchases |
+| Currency | EUR; each trade at its own date's rate, each close at the same-day rate |
+| Stale prices | A close is carried at most 3 Monday-Friday sessions; beyond that the line leaves the total, which is flagged |
+| Return | Time-weighted, chained daily on the positions held the day before, gross dividends included, not annualised |
+| Market and flow | Change in value = market effect (price and FX on what was held) + flow effect (purchases - sales), to the cent |
+| Dividends | Gross, on the ex-date; entitled quantity = holding at the close before the ex-date |
+| Currency effect | (1 + EUR return) / (1 + local return) - 1, so the product identity holds exactly |
+
+## Results on the synthetic data (seed 20240613)
+
+`python -m risk_engine demo` values a EUR 10.0 m book on 2025-10-31: eight listed names,
+two fictitious illiquid lines (a small cap and a thinly traded stock, 10 % of the total)
+and two cash pockets. The journal has 25 trades since February 2020, including a
+position sold out and rebought, a same-session sale and purchase, and a line closed.
+
+| Window | From | Return | Market effect EUR | Flow effect EUR |
+|---|---|---|---|---|
+| 1 week | 2025-10-24 | -0.99 % | -93,411 | 0 |
+| 1 month | 2025-10-01 | -6.66 % | -674,929 | 0 |
+| Year to date | 2024-12-31 | +7.14 % | 438,962 | 370,762 |
+| 1 year | 2024-10-31 | -1.67 % | -332,335 | 208,193 |
+| Since inception | 2020-02-10 | +17.53 % | 333,471 | 7,280,844 |
+
+Since inception the book gained EUR 333,471 on markets, while EUR 7.28 m of net purchases
+account for the rest of the change in value; realised P&L is EUR -129,835.
+
+| Register, whole life of the line | State | Local return | EUR return | Currency effect |
+|---|---|---|---|---|
+| Sony Group (JPY) | sold out, rebought | -0.58 % | +19.57 % | +20.27 % |
+| Gold, 1 kg bar (USD) | held | +58.12 % | +69.52 % | +7.21 % |
+| Procter & Gamble (USD) | held | +17.26 % | +23.32 % | +5.16 % |
+| Kone (EUR) | exited | -0.76 % | -0.76 % | 0.00 % |
+
+Exposures, as a share of wealth: USD 28.9 %, EUR 26.6 %, HKD 14.1 %, gold 10.4 %,
+CHF 10.2 %, JPY 9.8 %; by zone, eurozone 37.1 %, North America 28.9 %, Greater China
+14.1 %. The largest line weighs 16.6 % of securities and cash 7.3 % of wealth.
+
+Against a composite benchmark weighted like the currency exposure (Europe 35 %, US 28 %,
+Asia ex-Japan 15 %, gold 11 %, Japan 11 %), both total return over 1,494 sessions:
+beta 0.90, alpha +0.50 % a year, R squared 0.79, tracking error 7.63 %.
+
+---
+
+# Part 2: Market risk
+
+## What it covers
+
+| Block | Module | Content |
+|---|---|---|
 | Risk | `risk.py` | Volatility, historical and normal VaR and ES at 95 %, 97.5 %, 99 %, maximum drawdown and its duration |
 | Witness | `witness/` | Independent recomputation of every risk figure from raw closes, rates and quantities |
 | Backtest | `backtest.py` | Rolling 250-session 99 % VaR, Kupiec, Christoffersen, Basel traffic-light zones |
 | Stress | `stress.py`, `liquidity.py`, `scenarios.toml` | Instant market shocks, worst historical week, days-to-liquidate under stressed participation |
-| Benchmark | `benchmark.py` | Composite benchmark weighted like the currency exposure; beta, alpha, R squared |
-| Controls | `quality.py` | Split-like price jumps, stale series, session gaps, implausible quantity changes |
 
 ## Why an independent calculation
 
@@ -58,11 +126,9 @@ imported the checked code would share its bugs and prove nothing.
 | Drawdown | Largest fall of the chained index from its running peak, with peak, trough and recovery dates |
 | Cash | Excluded from risk (no market risk); included in wealth, currency exposure and stress tests |
 
-## Results on the synthetic data (seed 20240613)
+## Results on the synthetic data
 
-`python -m risk_engine demo` values a EUR 10.0 m book on 2025-10-31: eight listed names,
-two fictitious illiquid lines (a small cap and a thinly traded stock, 10 % of the total)
-and two cash pockets, over 1,495 daily returns.
+Over 1,495 daily returns:
 
 | Method | Level | VaR % | ES % | VaR EUR | ES EUR |
 |---|---|---|---|---|---|
@@ -113,6 +179,8 @@ sessions, more than five weeks, to sell.
 
 ![Backtest: daily return against the previous day's 99 % VaR, exceptions in red](docs/img/var_backtest.png)
 
+---
+
 ## Installation
 
 ```bash
@@ -120,6 +188,7 @@ python -m venv .venv
 .venv/bin/pip install -e ".[dev]"          # Linux, macOS; add ,live for the Yahoo mode
 .venv\Scripts\pip install -e ".[dev]"      # Windows
 python -m risk_engine demo                 # synthetic data, writes docs/img/*.png
+python -m risk_engine demo --html          # also writes the dashboard, docs/dashboard.html
 python -m risk_engine demo --live          # Yahoo closes, cached in .cache/ (not committed)
 python -m risk_engine seeds --n 30         # backtest over 30 synthetic histories
 pytest && ruff check .
@@ -129,6 +198,12 @@ Python 3.11 or later; numpy, pandas, scipy, matplotlib; yfinance only for `--liv
 
 ## Limits
 
+- **Performance.** Returns are time-weighted and never annualised; they say how the
+  positions did, not how well cash flows were timed (no money-weighted return).
+- **Corporate actions.** Splits must be restated in the journal (a guard flags trades that
+  look unrestated); spin-offs are not neutralised in the chained index.
+- **Dividends.** Gross, without withholding tax; the benchmark trackers follow net indices,
+  a bias the dashboard shows as a band rather than corrects.
 - **Historical window.** The VaR only knows the last ten years of this composition; a regime
   absent from the window is absent from the figure, and today's weights are applied to
   the whole past (the book was not held this way throughout).

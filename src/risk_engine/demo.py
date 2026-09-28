@@ -88,8 +88,10 @@ def run(market: MarketData, live: bool = False) -> dict:
     exp = exposures.compute_exposures(values, secs, cash, market.betas)
     adv = liquidity.average_volumes(market.volumes)
     result = risk.compute_advanced_risk(values, eur, as_of)
+    equity_venue = secs.loc[secs["asset_class"] == "equity", "venue"]
     out = {
-        "live": live, "as_of": as_of, "book": book, "quantities": qty,
+        "live": live, "as_of": as_of, "book": book, "quantities": qty, "securities": secs,
+        "local_close": market.prices.loc[:as_of].ffill().iloc[-1],
         "valuation": valuation, "history": history, "periods": periods,
         "register": reg, "register_summary": register.register_summary(reg),
         "yield_on_cost": dividends.yield_on_cost(received, book.open_cost_eur,
@@ -101,8 +103,8 @@ def run(market: MarketData, live: bool = False) -> dict:
         "liquidity": liquidity.compute_liquidity_metrics(qty, values, adv),
         "scenarios": stress.run_scenarios(values, secs, cash),
         "price_jumps": quality.scan_price_jumps(market.prices),
-        "freshness": quality.freshness(market.prices, secs.loc[secs["asset_class"] == "equity",
-                                                               "venue"], as_of),
+        "freshness": quality.freshness(market.prices, equity_venue, as_of),
+        "gap_shortfall": quality.gap_shortfall(market.prices, equity_venue),
         "raw_unit_trades": quality.raw_unit_trades(market.journal, market.prices, secs),
     }
     if live:

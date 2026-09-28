@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import BinaryIO
 
 import matplotlib
 
@@ -100,7 +101,7 @@ def _style(ax: plt.Axes) -> None:
     ax.set_axisbelow(True)
 
 
-def plot_distribution(r: dict, path: Path) -> None:
+def plot_distribution(r: dict, path: Path | BinaryIO) -> None:
     """Histogram of daily P&L in EUR with the VaR and ES lines."""
     rk = r["risk"]
     pnl = rk["pnl_eur"] / 1000
@@ -123,7 +124,7 @@ def plot_distribution(r: dict, path: Path) -> None:
     plt.close(fig)
 
 
-def plot_backtest(r: dict, path: Path) -> None:
+def plot_backtest(r: dict, path: Path | BinaryIO) -> None:
     """Daily return against the previous day's 99 % VaR, exceptions in red, one panel per method."""
     fig, axes = plt.subplots(2, 1, figsize=(9, 6), sharex=True, sharey=True, facecolor=SURFACE)
     for ax, b, color in zip(axes, r["backtest"], (ORANGE, VIOLET), strict=True):
